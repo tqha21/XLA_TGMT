@@ -156,3 +156,4 @@ def run_image_benchmark_task(
         json.dump(experiment_data, f, ensure_ascii=False, indent=2)
 
     return experiment_data
+

@@ -1,296 +1,351 @@
 {% extends "base.html" %}
 
-{% block title %}Kết Quả Thử Nghiệm - ImageBench{% endblock %}
+{% block title %}Bảng Đánh Giá & So Sánh Chất Lượng Ảnh - ImageBench Pro{% endblock %}
 
 {% block extra_head %}
-<style>
-/* Split Slider CSS */
-.comparison-container {
-    position: relative;
-    width: 100%;
-    max-height: 480px;
-    overflow: hidden;
-    border-radius: 8px;
-    background-color: #0b1120;
-    user-select: none;
-}
-.comparison-container img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    max-height: 480px;
-    object-fit: contain;
-}
-.img-comp-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 50%;
-    height: 100%;
-    overflow: hidden;
-    border-right: 3px solid #3b82f6;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-    background-color: #0b1120;
-}
-.img-comp-slider {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 36px;
-    height: 36px;
-    background: #2563eb;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: ew-resize;
-    z-index: 10;
-    box-shadow: 0 0 12px rgba(37, 99, 235, 0.8);
-    pointer-events: none;
-}
-</style>
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
 <div class="container-xl" id="resultsApp" data-experiment-id="{{ experiment_id }}">
-    <!-- Top Action Bar -->
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 pb-3 border-bottom border-slate-700">
-        <div>
-            <a href="/" class="btn btn-outline-slate btn-sm rounded-pill text-xs px-3 mb-2">
-                <i class="fa-solid fa-arrow-left me-1"></i> Thử nghiệm ảnh khác
-            </a>
-            <div class="d-flex align-items-center gap-2">
-                <h4 class="fw-extrabold text-white mb-0" id="headerImageName">Bảng Đánh Giá & So Sánh Nén Ảnh</h4>
-                <span class="badge bg-slate-800 text-slate-300 border border-slate-700 text-xs px-2.5 py-1">
-                    ID: {{ experiment_id[:8] }}
-                </span>
+    
+    <!-- Real-time Loading & Progress State (shown if task is still running) -->
+    <div id="resultsLoadingState" class="d-none">
+        <div class="card bg-card border border-slate-700 shadow-lg rounded-4 p-5 text-center my-5 max-w-700 mx-auto">
+            <div class="loading-pulse-spinner mx-auto mb-4">
+                <i class="fa-solid fa-microchip fs-1 text-primary"></i>
+            </div>
+            <h4 class="text-white fw-bold mb-2" id="loadingTitle">Đang Phân Tích & Tính Toán Chỉ Số Chất Lượng</h4>
+            <p class="text-slate-400 text-xs mb-4" id="loadingSubtitle">Celery Worker đang thực thi nén đa luồng và đo đạc ma trận điểm ảnh MSE, PSNR, SSIM...</p>
+            
+            <div class="progress mb-2 bg-darker border border-slate-700" style="height: 12px; border-radius: 6px;">
+                <div id="loadingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 15%"></div>
+            </div>
+            <div class="d-flex justify-content-between text-slate-400 text-xxs px-1">
+                <span id="loadingStepText">Đang xếp hàng...</span>
+                <span id="loadingPercentBadge" class="fw-bold text-primary">15%</span>
             </div>
         </div>
+    </div>
 
-        <!-- Export Buttons (FR-10) -->
-        <div class="d-flex align-items-center gap-2">
-            <div class="dropdown">
-                <button class="btn btn-primary btn-sm px-3 rounded-pill dropdown-toggle fw-semibold text-xs shadow-sm" type="button" data-bs-toggle="dropdown">
-                    <i class="fa-solid fa-file-export me-1.5"></i> Xuất Báo Cáo
+    <!-- Main Results Container (displayed when experiment completed) -->
+    <div id="resultsMainContent">
+        <!-- Top Action Bar -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 pb-3 border-bottom border-slate-700">
+            <div>
+                <a href="/" class="btn btn-outline-slate btn-sm rounded-pill text-xs px-3 mb-2">
+                    <i class="fa-solid fa-arrow-left me-1.5"></i> Thử nghiệm ảnh khác
+                </a>
+                <div class="d-flex align-items-center gap-2">
+                    <h3 class="fw-extrabold text-white mb-0" id="headerImageName">Báo Cáo Phân Tích & So Sánh Ảnh</h3>
+                    <span class="badge bg-slate-800 text-slate-300 border border-slate-700 text-xs px-2.5 py-1">
+                        ID: {{ experiment_id[:8] }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Action Buttons: Print, Export (CSV, PDF, JSON), Delete -->
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-slate btn-sm rounded-pill text-xs px-3" onclick="window.print()" title="In báo cáo">
+                    <i class="fa-solid fa-print me-1.5"></i> In kết quả
                 </button>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end text-xs border border-slate-700">
-                    <li>
-                        <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=csv">
-                            <i class="fa-solid fa-file-csv text-success me-2"></i> Xuất bảng dữ liệu CSV (Excel)
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=pdf">
-                            <i class="fa-solid fa-file-pdf text-danger me-2"></i> Xuất tài liệu PDF tổng kết
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=json">
-                            <i class="fa-solid fa-code text-info me-2"></i> Xuất dữ liệu thô JSON
-                        </a>
-                    </li>
-                </ul>
-            </div>
 
-            <button id="deleteExpBtn" type="button" class="btn btn-outline-danger btn-sm rounded-pill text-xs px-3" title="Xóa dữ liệu phiên">
-                <i class="fa-regular fa-trash-can me-1"></i> Xóa phiên
-            </button>
-        </div>
-    </div>
+                <div class="dropdown">
+                    <button class="btn btn-primary btn-sm px-3 rounded-pill dropdown-toggle fw-semibold text-xs shadow-sm" type="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-file-export me-1.5"></i> Xuất Báo Cáo
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end text-xs border border-slate-700 shadow-lg">
+                        <li>
+                            <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=csv">
+                                <i class="fa-solid fa-file-csv text-success me-2"></i> Xuất bảng dữ liệu CSV (UTF-8 Excel)
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=pdf">
+                                <i class="fa-solid fa-file-pdf text-danger me-2"></i> Xuất tài liệu tóm tắt PDF
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item py-2" href="/api/experiments/{{ experiment_id }}/report?format=json">
+                                <i class="fa-solid fa-code text-info me-2"></i> Xuất dữ liệu cấu trúc JSON
+                            </a>
+                        </li>
+                    </ul>
+                </div>
 
-    <!-- Recommendations Engine Cards (FR-09) -->
-    <div class="mb-4">
-        <h5 class="fw-bold text-white mb-3">
-            <i class="fa-solid fa-lightbulb text-warning me-2"></i>Khuyến Nghị Định Dạng Thông Minh (FR-09)
-        </h5>
-        <div class="row g-3" id="recommendationContainer">
-            <!-- Dynamically populated via JS -->
-            <div class="col-12 text-center py-4 text-slate-400">
-                <div class="spinner-border spinner-border-sm text-primary me-2"></div> Đang tải kết quả phân tích...
+                <button id="deleteExpBtn" type="button" class="btn btn-outline-danger btn-sm rounded-pill text-xs px-3" title="Xóa dữ liệu phiên">
+                    <i class="fa-regular fa-trash-can me-1"></i> Xóa phiên
+                </button>
             </div>
         </div>
-    </div>
 
-    <!-- Image Comparison UI (FR-07) -->
-    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 overflow-hidden mb-4">
-        <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <span class="fw-bold text-white fs-6">
-                    <i class="fa-solid fa-images text-primary me-2"></i>So Sánh Trực Quan Ảnh Gốc & Ảnh Nén (FR-07)
-                </span>
+        <!-- KPI Metrics Scorecards Overview -->
+        <div class="row g-3 mb-4" id="kpiScorecards">
+            <div class="col-6 col-lg-3">
+                <div class="card kpi-card bg-card border border-slate-700 p-3 rounded-4 shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-slate-400 text-xxs uppercase fw-bold tracking-wider">Dung lượng gốc</span>
+                        <div class="kpi-icon bg-secondary-subtle text-slate-300 rounded-3 p-1.5"><i class="fa-solid fa-database"></i></div>
+                    </div>
+                    <h4 class="text-white fw-bold mb-0" id="kpiOriginalSize">-</h4>
+                    <span class="text-slate-400 text-xxs mt-1" id="kpiOriginalDimensions">-</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card kpi-card bg-card border border-slate-700 p-3 rounded-4 shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-slate-400 text-xxs uppercase fw-bold tracking-wider">Độ nén tốt nhất</span>
+                        <div class="kpi-icon bg-warning-subtle text-warning rounded-3 p-1.5"><i class="fa-solid fa-bolt"></i></div>
+                    </div>
+                    <h4 class="text-warning fw-bold mb-0" id="kpiMaxSaving">-</h4>
+                    <span class="text-slate-400 text-xxs mt-1" id="kpiMaxSavingFormat">-</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card kpi-card bg-card border border-slate-700 p-3 rounded-4 shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-slate-400 text-xxs uppercase fw-bold tracking-wider">PSNR cao nhất</span>
+                        <div class="kpi-icon bg-info-subtle text-info rounded-3 p-1.5"><i class="fa-solid fa-wave-square"></i></div>
+                    </div>
+                    <h4 class="text-info fw-bold mb-0" id="kpiBestPsnr">-</h4>
+                    <span class="text-slate-400 text-xxs mt-1" id="kpiBestPsnrQuality">-</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card kpi-card bg-card border border-slate-700 p-3 rounded-4 shadow-sm h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-slate-400 text-xxs uppercase fw-bold tracking-wider">Tương đồng SSIM</span>
+                        <div class="kpi-icon bg-success-subtle text-success rounded-3 p-1.5"><i class="fa-solid fa-eye"></i></div>
+                    </div>
+                    <h4 class="text-success fw-bold mb-0" id="kpiBestSsim">-</h4>
+                    <span class="text-slate-400 text-xxs mt-1" id="kpiBestSsimRating">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations Engine Cards (FR-09) -->
+        <div class="mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="fw-bold text-white mb-0">
+                    <i class="fa-solid fa-wand-magic-sparkles text-warning me-2"></i>Đề Xuất Định Dạng Thông Minh (Smart Recommendation)
+                </h5>
+                <span class="text-xxs text-slate-400">Tự động tính toán dựa trên bài toán thực tế</span>
+            </div>
+            <div class="row g-3" id="recommendationContainer">
+                <!-- Dynamically populated via JS -->
+            </div>
+        </div>
+
+        <!-- 1. Interactive Image Comparison Slider (TwentyTwenty style) -->
+        <div class="card bg-card border border-slate-700 shadow-sm rounded-4 overflow-hidden mb-4">
+            <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="brand-icon bg-primary text-white rounded-3 p-1.5 d-flex align-items-center justify-content-center">
+                        <i class="fa-solid fa-sliders text-xs"></i>
+                    </div>
+                    <div>
+                        <span class="fw-bold text-white fs-6">Interactive Comparison Slider (TwentyTwenty Style)</span>
+                        <span class="d-block text-xxs text-slate-400">Kéo thả thanh trượt hoặc chạm để soi trực tiếp từng điểm ảnh</span>
+                    </div>
+                </div>
+                
+                <!-- Target Selector & View Mode Switcher -->
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-1.5">
+                        <label for="compareSelect" class="text-xxs text-slate-400 mb-0 fw-semibold uppercase">Ảnh so sánh:</label>
+                        <select id="compareSelect" class="form-select form-select-sm bg-darker text-white border-slate-700 text-xs py-1" style="min-width: 220px;">
+                            <!-- Options populated via JS -->
+                        </select>
+                    </div>
+
+                    <!-- Preset Slider Jump Buttons -->
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-slate text-xxs px-2" id="jump25">25%</button>
+                        <button type="button" class="btn btn-outline-slate text-xxs px-2" id="jump50">50%</button>
+                        <button type="button" class="btn btn-outline-slate text-xxs px-2" id="jump75">75%</button>
+                    </div>
+
+                    <!-- Mode Toggle -->
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-slate text-xs active" id="btnModeSlider" title="Thanh trượt TwentyTwenty"><i class="fa-solid fa-arrows-left-right me-1"></i> Slider</button>
+                        <button type="button" class="btn btn-outline-slate text-xs" id="btnModeSide" title="Hai ảnh cạnh nhau"><i class="fa-solid fa-table-columns me-1"></i> Cạnh nhau</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-4">
+                <!-- Mode 1: TwentyTwenty Interactive Slider -->
+                <div id="sliderModeContainer">
+                    <div class="twentytwenty-wrapper" id="twentytwentyContainer">
+                        <!-- After Image (Base bottom layer) -->
+                        <img id="compAfterImg" src="" alt="Ảnh sau xử lý" class="twentytwenty-after">
+                        
+                        <!-- Before Image (Clipped top layer) -->
+                        <div class="twentytwenty-overlay" id="compOverlay">
+                            <img id="compBeforeImg" src="" alt="Ảnh gốc" class="twentytwenty-before">
+                        </div>
+
+                        <!-- Draggable Divider Line & Handle -->
+                        <div class="twentytwenty-handle" id="compHandle">
+                            <div class="handle-line"></div>
+                            <div class="handle-circle shadow-lg">
+                                <i class="fa-solid fa-chevron-left"></i>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </div>
+                            <div class="handle-line"></div>
+                        </div>
+
+                        <!-- Directional Labels -->
+                        <span class="twentytwenty-label label-before">Ảnh Gốc (Before)</span>
+                        <span class="twentytwenty-label label-after">Sau Nén (After)</span>
+                    </div>
+                </div>
+
+                <!-- Mode 2: Side-by-Side Dual View -->
+                <div id="sideModeContainer" class="d-none">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 bg-darker rounded-3 border border-slate-800 text-center">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-secondary-subtle text-slate-300 text-xs">Ảnh Gốc (Reference)</span>
+                                    <span class="text-xs text-slate-400" id="sideOriginalSize">-</span>
+                                </div>
+                                <div class="side-img-box">
+                                    <img id="sideOriginalImg" src="" alt="Ảnh gốc" class="img-fluid rounded">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-darker rounded-3 border border-slate-800 text-center">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-primary-subtle text-primary text-xs" id="sideTargetBadge">Ảnh Sau Nén</span>
+                                    <span class="text-xs text-warning" id="sideTargetMetrics">-</span>
+                                </div>
+                                <div class="side-img-box">
+                                    <img id="sideTargetImg" src="" alt="Ảnh sau nén" class="img-fluid rounded">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Target Status & Real-time Metrics Pill Bar -->
+                <div class="mt-3 p-3 bg-darker rounded-3 border border-slate-800 d-flex flex-wrap align-items-center justify-content-between gap-3 text-xs">
+                    <div>
+                        <span class="text-slate-400">Đang đối chiếu:</span>
+                        <b class="text-white ms-1" id="activeTargetLabel">-</b>
+                    </div>
+                    <div class="d-flex flex-wrap gap-4">
+                        <div><span class="text-slate-400">Dung lượng:</span> <b class="text-warning" id="activeTargetSize">-</b></div>
+                        <div><span class="text-slate-400">Tiết kiệm:</span> <b class="text-success" id="activeTargetSaving">-</b></div>
+                        <div><span class="text-slate-400">PSNR:</span> <b class="text-info" id="activeTargetPsnr">-</b></div>
+                        <div><span class="text-slate-400">SSIM:</span> <b class="text-primary" id="activeTargetSsim">-</b></div>
+                        <div><span class="text-slate-400">Độ lệch MSE:</span> <b class="text-slate-300" id="activeTargetMse">-</b></div>
+                        <div><span class="text-slate-400">Thời gian mã hóa:</span> <b class="text-slate-300" id="activeTargetTime">-</b></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Metrics Dashboard (Chart.js: Radar, Bar, Rate-Distortion, Time) -->
+        <div class="mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold text-white mb-0">
+                    <i class="fa-solid fa-chart-pie text-info me-2"></i>Trực Quan Hóa Chỉ Số Chất Lượng (Metrics Dashboard)
+                </h5>
+                <span class="text-xxs text-slate-400">Tích hợp Chart.js đa chiều</span>
             </div>
             
-            <!-- Controls for comparison -->
-            <div class="d-flex align-items-center gap-2">
-                <label for="compareSelect" class="text-xs text-slate-400 mb-0">Chọn ảnh so sánh:</label>
-                <select id="compareSelect" class="form-select form-select-sm bg-darker text-white border-slate-700 text-xs py-1" style="min-width: 200px;">
-                    <!-- Options populated via JS -->
-                </select>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-slate text-xs active" id="btnModeSlider" title="Thanh trượt chia đôi"><i class="fa-solid fa-arrows-left-right me-1"></i> Slider</button>
-                    <button type="button" class="btn btn-outline-slate text-xs" id="btnModeSide" title="Cạnh nhau"><i class="fa-solid fa-table-columns me-1"></i> Cạnh nhau</button>
-                </div>
-            </div>
-        </div>
-        <div class="card-body p-4">
-            <!-- Slider Mode -->
-            <div id="sliderModeContainer">
-                <div class="d-flex justify-content-between text-xs text-slate-400 mb-2 px-1">
-                    <span><i class="fa-solid fa-arrow-left me-1"></i> Kéo thanh trượt để soi ảnh: <b>Ảnh Gốc (Bên Trái)</b></span>
-                    <span><b>Ảnh Sau Nén (Bên Phải)</b> <i class="fa-solid fa-arrow-right ms-1"></i></span>
-                </div>
-                <div class="comparison-container" id="compContainer">
-                    <img id="compAfterImg" src="" alt="Ảnh sau nén">
-                    <div class="img-comp-overlay" id="compOverlay">
-                        <img id="compBeforeImg" src="" alt="Ảnh gốc">
-                    </div>
-                    <div class="img-comp-slider" id="compSlider">
-                        <i class="fa-solid fa-arrows-left-right text-xs"></i>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Side by Side Mode -->
-            <div id="sideModeContainer" class="d-none">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="p-3 bg-darker rounded-3 border border-slate-800 text-center">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-secondary-subtle text-slate-300 text-xs">Ảnh Gốc (Reference)</span>
-                                <span class="text-xs text-slate-400" id="sideOriginalSize">-</span>
-                            </div>
-                            <div class="d-flex align-items-center justify-content-center" style="min-height: 320px; max-height: 420px; overflow: hidden;">
-                                <img id="sideOriginalImg" src="" alt="Ảnh gốc" class="img-fluid rounded" style="max-height: 400px; object-fit: contain;">
-                            </div>
+            <div class="row g-4">
+                <!-- Chart 1: Radar Chart (Đa trục chất lượng tổng thể) -->
+                <div class="col-lg-6">
+                    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
+                        <div class="card-header bg-transparent border-0 px-2 py-1">
+                            <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-spider text-primary me-2"></i>Biểu Đồ Radar Đa Chiều (Quality & Compression Radar)</h6>
+                            <p class="text-slate-400 text-xxs mb-0">So sánh cân đối 5 trục: PSNR, SSIM, % Tiết Kiệm, Tốc Độ Xử Lý và Hiệu Quả Nén bpp.</p>
+                        </div>
+                        <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 320px;">
+                            <canvas id="radarChart"></canvas>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="p-3 bg-darker rounded-3 border border-slate-800 text-center">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-primary-subtle text-primary text-xs" id="sideTargetBadge">Ảnh Sau Nén</span>
-                                <span class="text-xs text-warning" id="sideTargetMetrics">-</span>
-                            </div>
-                            <div class="d-flex align-items-center justify-content-center" style="min-height: 320px; max-height: 420px; overflow: hidden;">
-                                <img id="sideTargetImg" src="" alt="Ảnh sau nén" class="img-fluid rounded" style="max-height: 400px; object-fit: contain;">
-                            </div>
+                </div>
+
+                <!-- Chart 2: File Size Comparison Bar Chart -->
+                <div class="col-lg-6">
+                    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
+                        <div class="card-header bg-transparent border-0 px-2 py-1">
+                            <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-chart-simple text-warning me-2"></i>So Sánh Dung Lượng File Gốc vs Sau Nén (KB)</h6>
+                            <p class="text-slate-400 text-xxs mb-0">Cột càng thấp càng tiết kiệm băng thông mạng và chi phí lưu trữ đám mây.</p>
+                        </div>
+                        <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 320px;">
+                            <canvas id="sizeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Rate-Distortion Curve (Dung Lượng vs PSNR) -->
+                <div class="col-lg-6">
+                    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
+                        <div class="card-header bg-transparent border-0 px-2 py-1">
+                            <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-bezier-curve text-info me-2"></i>Đường Cong Đánh Đổi Rate-Distortion (Size vs PSNR)</h6>
+                            <p class="text-slate-400 text-xxs mb-0">Vị trí lý tưởng nằm góc trên bên trái: Tỷ số tín hiệu/nhiễu cao với dung lượng nhỏ nhất.</p>
+                        </div>
+                        <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 300px;">
+                            <canvas id="rdChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart 4: Encoding Time Performance -->
+                <div class="col-lg-6">
+                    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
+                        <div class="card-header bg-transparent border-0 px-2 py-1">
+                            <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-stopwatch text-danger me-2"></i>Thời Gian Mã Hóa CPU (Encoding Latency - ms)</h6>
+                            <p class="text-slate-400 text-xxs mb-0">Thời gian CPU xử lý mã hóa nén (ms). Giá trị thấp hơn mang lại tốc độ phản hồi nhanh hơn.</p>
+                        </div>
+                        <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 300px;">
+                            <canvas id="timeChart"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Selected Target Metric Bar -->
-            <div class="mt-3 p-3 bg-darker rounded-3 border border-slate-800 d-flex flex-wrap align-items-center justify-content-between gap-3 text-xs">
-                <div>
-                    <span class="text-slate-400">Đang xem:</span>
-                    <b class="text-white ms-1" id="activeTargetLabel">-</b>
-                </div>
-                <div class="d-flex flex-wrap gap-4">
-                    <div><span class="text-slate-400">Dung lượng:</span> <b class="text-warning" id="activeTargetSize">-</b></div>
-                    <div><span class="text-slate-400">Tiết kiệm:</span> <b class="text-success" id="activeTargetSaving">-</b></div>
-                    <div><span class="text-slate-400">PSNR:</span> <b class="text-info" id="activeTargetPsnr">-</b></div>
-                    <div><span class="text-slate-400">SSIM:</span> <b class="text-primary" id="activeTargetSsim">-</b></div>
-                    <div><span class="text-slate-400">Thời gian mã hóa:</span> <b class="text-slate-300" id="activeTargetTime">-</b></div>
-                </div>
-            </div>
         </div>
-    </div>
 
-    <!-- Charts Dashboard (FR-08) -->
-    <div class="mb-4">
-        <h5 class="fw-bold text-white mb-3">
-            <i class="fa-solid fa-chart-pie text-info me-2"></i>Trực Quan Hóa Dữ Liệu & Biểu Đồ So Sánh (FR-08)
-        </h5>
-        <div class="row g-4">
-            <!-- Chart 1: File Size Comparison -->
-            <div class="col-lg-6">
-                <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
-                    <div class="card-header bg-transparent border-0 px-2 py-1">
-                        <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-chart-bar text-warning me-2"></i>So Sánh Dung Lượng Tệp (KB)</h6>
-                        <p class="text-slate-400 text-xxs mb-0">Dung lượng càng thấp càng tiết kiệm không gian lưu trữ và băng thông truyền tải.</p>
-                    </div>
-                    <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 280px;">
-                        <canvas id="sizeChart"></canvas>
-                    </div>
-                </div>
+        <!-- Full Results Data Table -->
+        <div class="card bg-card border border-slate-700 shadow-sm rounded-4 overflow-hidden mb-5">
+            <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3 d-flex justify-content-between align-items-center">
+                <span class="fw-bold text-white fs-6">
+                    <i class="fa-solid fa-table-list text-primary me-2"></i>Bảng Dữ Liệu Chi Tiết Đầy Đủ
+                </span>
+                <span class="text-xs text-slate-400" id="tableRowCount"></span>
             </div>
-
-            <!-- Chart 2: Rate-Distortion Curve (Dung lượng vs PSNR) -->
-            <div class="col-lg-6">
-                <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
-                    <div class="card-header bg-transparent border-0 px-2 py-1">
-                        <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-bezier-curve text-primary me-2"></i>Đường Cong Đánh Đổi (Dung Lượng vs PSNR)</h6>
-                        <p class="text-slate-400 text-xxs mb-0">Điểm nằm góc trên bên trái là tối ưu nhất: PSNR cao với dung lượng nhỏ.</p>
-                    </div>
-                    <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 280px;">
-                        <canvas id="rdChart"></canvas>
-                    </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-striped align-middle text-xs mb-0" id="resultsTable">
+                        <thead class="text-slate-400 border-bottom border-slate-700">
+                            <tr>
+                                <th class="py-3 px-3">Định dạng</th>
+                                <th class="py-3 px-2">Quality</th>
+                                <th class="py-3 px-3">Dung lượng</th>
+                                <th class="py-3 px-2">Tiết kiệm</th>
+                                <th class="py-3 px-2">Tỷ lệ nén</th>
+                                <th class="py-3 px-2">bpp</th>
+                                <th class="py-3 px-2">MSE</th>
+                                <th class="py-3 px-2">PSNR</th>
+                                <th class="py-3 px-2">SSIM</th>
+                                <th class="py-3 px-2">Thời gian</th>
+                                <th class="py-3 px-3">Đánh giá chất lượng</th>
+                                <th class="py-3 px-3 text-end">Tác vụ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-
-            <!-- Chart 3: SSIM Comparison -->
-            <div class="col-lg-6">
-                <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
-                    <div class="card-header bg-transparent border-0 px-2 py-1">
-                        <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-bullseye text-success me-2"></i>Độ Tương Đồng Cấu Trúc (SSIM Score)</h6>
-                        <p class="text-slate-400 text-xxs mb-0">Thang điểm 0.0 đến 1.0; giá trị càng gần 1.0 độ trung thực hình ảnh càng cao.</p>
-                    </div>
-                    <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 280px;">
-                        <canvas id="ssimChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Chart 4: Encoding Time -->
-            <div class="col-lg-6">
-                <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 p-3">
-                    <div class="card-header bg-transparent border-0 px-2 py-1">
-                        <h6 class="fw-bold text-white mb-1"><i class="fa-solid fa-stopwatch text-danger me-2"></i>Thời Gian Mã Hóa (Milliseconds)</h6>
-                        <p class="text-slate-400 text-xxs mb-0">Thời gian CPU tiêu tốn để nén ảnh (thấp hơn nghĩa là tốc độ xử lý nhanh hơn).</p>
-                    </div>
-                    <div class="card-body p-2 d-flex align-items-center justify-content-center" style="height: 280px;">
-                        <canvas id="timeChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Complete Results Table -->
-    <div class="card bg-card border border-slate-700 shadow-sm rounded-4 overflow-hidden mb-5">
-        <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-white fs-6">
-                <i class="fa-solid fa-table-list text-primary me-2"></i>Bảng Dữ Liệu Chi Tiết Đầy Đủ
-            </span>
-            <span class="text-xs text-slate-400" id="tableRowCount"></span>
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-dark table-hover table-striped align-middle text-xs mb-0" id="resultsTable">
-                    <thead class="text-slate-400 border-bottom border-slate-700">
-                        <tr>
-                            <th class="py-3 px-3">Định dạng</th>
-                            <th class="py-3 px-2">Quality</th>
-                            <th class="py-3 px-3">Dung lượng</th>
-                            <th class="py-3 px-2">Tiết kiệm</th>
-                            <th class="py-3 px-2">Tỷ lệ nén</th>
-                            <th class="py-3 px-2">bpp</th>
-                            <th class="py-3 px-2">MSE</th>
-                            <th class="py-3 px-2">PSNR</th>
-                            <th class="py-3 px-2">SSIM</th>
-                            <th class="py-3 px-2">Thời gian</th>
-                            <th class="py-3 px-3">Đánh giá chất lượng</th>
-                            <th class="py-3 px-3 text-end">Tác vụ</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        <!-- Populated via JS -->
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-

@@ -1,7 +1,6 @@
-// ImageBench Core Frontend Engine
+// ImageBench Pro - Advanced Frontend & UX Engine
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Determine which page we are on
     const resultsApp = document.getElementById("resultsApp");
     if (resultsApp) {
         initResultsPage(resultsApp.dataset.experimentId);
@@ -145,7 +144,7 @@ function initUploadPage() {
         });
     }
 
-    // Launch Benchmark Execution
+    // Launch Asynchronous Benchmark Execution
     if (startBenchmarkBtn) {
         startBenchmarkBtn.addEventListener("click", async () => {
             if (!currentExperimentId) return;
@@ -178,7 +177,7 @@ function initUploadPage() {
                 if (taskDetailText && detailText) taskDetailText.textContent = detailText;
             }
 
-            updateProgressUI(5, "Đang gửi yêu cầu vào hàng đợi Celery...", "Khởi tạo Task ID...");
+            updateProgressUI(5, "Đang gửi yêu cầu vào hàng đợi Celery Task...", "Khởi tạo Task ID...");
 
             try {
                 const resp = await fetch("/api/experiments", {
@@ -193,7 +192,6 @@ function initUploadPage() {
                 const data = await resp.json();
 
                 if (resp.status === 202 && data.task_id) {
-                    // Start polling asynchronous Celery task status
                     const taskId = data.task_id;
                     const pollInterval = setInterval(async () => {
                         try {
@@ -219,12 +217,11 @@ function initUploadPage() {
                                 showAlert("Tác vụ xử lý ảnh thất bại: " + (statusData.error || "Lỗi không xác định"));
                             }
                         } catch (pollErr) {
-                            // Transient network blip during polling, continue
+                            // Transient polling error, continue
                         }
                     }, 600);
 
                 } else if (resp.ok && data.status === "success") {
-                    // Synchronous fallback (if applicable)
                     window.location.href = `/experiments/${currentExperimentId}`;
                 } else {
                     processingBox.classList.add("d-none");
@@ -241,11 +238,52 @@ function initUploadPage() {
 }
 
 /* ========================================================
-   RESULTS, COMPARISON & CHARTS WORKFLOW (results.html)
+   RESULTS, COMPARISON & METRICS DASHBOARD (results.html)
    ======================================================== */
 async function initResultsPage(experimentId) {
-    let experimentData = null;
+    const loadingState = document.getElementById("resultsLoadingState");
+    const mainContent = document.getElementById("resultsMainContent");
 
+    // Check for optional task_id in query params (if redirected while processing)
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get("task_id");
+
+    if (taskId) {
+        loadingState.classList.remove("d-none");
+        mainContent.classList.add("d-none");
+
+        const pollInterval = setInterval(async () => {
+            try {
+                const sResp = await fetch(`/api/status/${taskId}`);
+                const sData = await sResp.json();
+
+                if (sData.state === "PROCESSING") {
+                    document.getElementById("loadingProgressBar").style.width = `${sData.percent || 40}%`;
+                    document.getElementById("loadingPercentBadge").textContent = `${sData.percent || 40}%`;
+                    document.getElementById("loadingStepText").textContent = sData.status || "Đang xử lý...";
+                } else if (sData.state === "SUCCESS") {
+                    clearInterval(pollInterval);
+                    document.getElementById("loadingProgressBar").style.width = "100%";
+                    document.getElementById("loadingPercentBadge").textContent = "100%";
+                    setTimeout(() => {
+                        loadingState.classList.add("d-none");
+                        mainContent.classList.remove("d-none");
+                        loadAndRenderExperiment(experimentId);
+                    }, 400);
+                } else if (sData.state === "FAILED") {
+                    clearInterval(pollInterval);
+                    alert("Tác vụ xử lý thất bại: " + (sData.error || "Lỗi"));
+                    window.location.href = "/";
+                }
+            } catch (e) {}
+        }, 700);
+    } else {
+        loadAndRenderExperiment(experimentId);
+    }
+}
+
+async function loadAndRenderExperiment(experimentId) {
+    let experimentData = null;
     try {
         const resp = await fetch(`/api/experiments/${experimentId}/results`);
         const result = await resp.json();
@@ -260,19 +298,20 @@ async function initResultsPage(experimentId) {
         return;
     }
 
-    // Set Header
-    document.getElementById("headerImageName").textContent = `Kết Quả: ${experimentData.metadata.filename}`;
+    // Set Header & KPI Scorecards
+    document.getElementById("headerImageName").textContent = `Báo Cáo: ${experimentData.metadata.filename}`;
+    renderKPIScorecards(experimentData);
 
     // 1. Render Recommendations (FR-09)
     renderRecommendations(experimentData.recommendations);
 
-    // 2. Render Image Comparison Setup (FR-07)
-    setupImageComparison(experimentData);
+    // 2. Render Interactive Image Comparison Slider (TwentyTwenty style)
+    setupTwentyTwentySlider(experimentData);
 
-    // 3. Render Chart Dashboard (FR-08)
-    renderCharts(experimentData);
+    // 3. Render Metrics Dashboard Charts (Radar, Bar, Rate-Distortion, Latency)
+    renderMetricsDashboard(experimentData);
 
-    // 4. Render Table
+    // 4. Render Results Data Table
     renderResultsTable(experimentData);
 
     // 5. Delete handler
@@ -288,6 +327,32 @@ async function initResultsPage(experimentId) {
                 }
             }
         });
+    }
+}
+
+/* Render KPI Overview Scorecards */
+function renderKPIScorecards(expData) {
+    const meta = expData.metadata;
+    const validResults = expData.results.filter(r => r.success);
+
+    document.getElementById("kpiOriginalSize").textContent = meta.formatted_size;
+    document.getElementById("kpiOriginalDimensions").textContent = `${meta.width}x${meta.height} px · ${meta.megapixels} MP`;
+
+    if (validResults.length > 0) {
+        // Best Saving
+        const bestSaving = maxBy(validResults, r => r.size_analysis.saving_percent);
+        document.getElementById("kpiMaxSaving").textContent = `-${bestSaving.size_analysis.saving_percent}%`;
+        document.getElementById("kpiMaxSavingFormat").textContent = `${bestSaving.target_format} Q${bestSaving.quality} (${bestSaving.size_analysis.formatted_compressed})`;
+
+        // Best PSNR
+        const bestPsnr = maxBy(validResults, r => r.quality_metrics.psnr > 100 ? 100 : r.quality_metrics.psnr);
+        document.getElementById("kpiBestPsnr").textContent = bestPsnr.quality_metrics.psnr_display;
+        document.getElementById("kpiBestPsnrQuality").textContent = `${bestPsnr.target_format} Q${bestPsnr.quality}`;
+
+        // Best SSIM
+        const bestSsim = maxBy(validResults, r => r.quality_metrics.ssim);
+        document.getElementById("kpiBestSsim").textContent = bestSsim.quality_metrics.ssim;
+        document.getElementById("kpiBestSsimRating").textContent = bestSsim.quality_metrics.quality_rating;
     }
 }
 
@@ -308,7 +373,7 @@ function renderRecommendations(rec) {
         const col = document.createElement("div");
         col.className = "col-md-4";
         col.innerHTML = `
-            <div class="card rec-card ${item.cls} p-3 h-100 shadow-sm border border-slate-700">
+            <div class="card rec-card ${item.cls} p-3.5 h-100 shadow-sm border border-slate-700">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="badge bg-dark-subtle text-white border border-slate-700 text-xxs px-2 py-1">
                         <i class="fa-solid ${item.icon} me-1 ${item.titleColor}"></i> ${item.badge}
@@ -340,8 +405,10 @@ function renderRecommendations(rec) {
     }
 }
 
-/* Image Comparison UI (FR-07) */
-function setupImageComparison(expData) {
+/* ========================================================
+   1. TWENTYTWENTY INTERACTIVE IMAGE COMPARISON SLIDER
+   ======================================================== */
+function setupTwentyTwentySlider(expData) {
     const originalUrl = expData.original_preview_url;
     const originalMeta = expData.metadata;
     const validResults = expData.results.filter(r => r.success);
@@ -356,14 +423,28 @@ function setupImageComparison(expData) {
         compareSelect.appendChild(opt);
     });
 
+    const container = document.getElementById("twentytwentyContainer");
     const compBeforeImg = document.getElementById("compBeforeImg");
     const compAfterImg = document.getElementById("compAfterImg");
+    const compOverlay = document.getElementById("compOverlay");
+    const compHandle = document.getElementById("compHandle");
+
     const sideOriginalImg = document.getElementById("sideOriginalImg");
     const sideTargetImg = document.getElementById("sideTargetImg");
 
     compBeforeImg.src = originalUrl;
     sideOriginalImg.src = originalUrl;
     document.getElementById("sideOriginalSize").textContent = originalMeta.formatted_size;
+
+    // Synchronize widths so top image does not stretch/compress on clipping
+    function syncImageWidth() {
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        compBeforeImg.style.width = rect.width + "px";
+    }
+
+    window.addEventListener("resize", syncImageWidth);
+    compAfterImg.addEventListener("load", syncImageWidth);
 
     function updateActiveTarget(index) {
         const target = validResults[index];
@@ -372,12 +453,13 @@ function setupImageComparison(expData) {
         compAfterImg.src = target.url;
         sideTargetImg.src = target.url;
 
-        // Metric Bar
+        // Metric Pill Bar
         document.getElementById("activeTargetLabel").textContent = `${target.target_format} (Quality ${target.quality})`;
         document.getElementById("activeTargetSize").textContent = target.size_analysis.formatted_compressed;
         document.getElementById("activeTargetSaving").textContent = `${target.size_analysis.saving_percent}%`;
         document.getElementById("activeTargetPsnr").textContent = target.quality_metrics.psnr_display;
         document.getElementById("activeTargetSsim").textContent = target.quality_metrics.ssim;
+        document.getElementById("activeTargetMse").textContent = target.quality_metrics.mse;
         document.getElementById("activeTargetTime").textContent = `${target.encoding_time_ms} ms`;
 
         // Side by side indicators
@@ -393,43 +475,64 @@ function setupImageComparison(expData) {
         updateActiveTarget(parseInt(e.target.value));
     });
 
-    // Slider Drag Logic
-    const compContainer = document.getElementById("compContainer");
-    const compOverlay = document.getElementById("compOverlay");
-    const compSlider = document.getElementById("compSlider");
-
-    let isSliding = false;
-    function moveSlider(clientX) {
-        const rect = compContainer.getBoundingClientRect();
-        let x = clientX - rect.left;
-        if (x < 0) x = 0;
-        if (x > rect.width) x = rect.width;
-        
-        const percent = (x / rect.width) * 100;
+    // Slider Dragging Mechanics
+    let isDragging = false;
+    function setSliderPosition(percent) {
+        percent = Math.max(0, Math.min(100, percent));
         compOverlay.style.width = percent + "%";
-        compSlider.style.left = percent + "%";
+        compHandle.style.left = percent + "%";
     }
 
-    compContainer.addEventListener("mousedown", (e) => {
-        isSliding = true;
-        moveSlider(e.clientX);
-    });
-    window.addEventListener("mouseup", () => isSliding = false);
-    window.addEventListener("mousemove", (e) => {
-        if (!isSliding) return;
-        moveSlider(e.clientX);
+    function onPointerMove(clientX) {
+        const rect = container.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const percent = (offsetX / rect.width) * 100;
+        setSliderPosition(percent);
+    }
+
+    container.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        compHandle.classList.add("dragging");
+        syncImageWidth();
+        onPointerMove(e.clientX);
     });
 
-    // Touch support for mobile/trackpad
-    compContainer.addEventListener("touchstart", (e) => {
-        isSliding = true;
-        if (e.touches[0]) moveSlider(e.touches[0].clientX);
+    window.addEventListener("mouseup", () => {
+        isDragging = false;
+        compHandle.classList.remove("dragging");
     });
-    window.addEventListener("touchend", () => isSliding = false);
+
+    window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        onPointerMove(e.clientX);
+    });
+
+    // Touch Support for Mobile / Trackpad
+    container.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        compHandle.classList.add("dragging");
+        syncImageWidth();
+        if (e.touches[0]) onPointerMove(e.touches[0].clientX);
+    });
+
+    window.addEventListener("touchend", () => {
+        isDragging = false;
+        compHandle.classList.remove("dragging");
+    });
+
     window.addEventListener("touchmove", (e) => {
-        if (!isSliding || !e.touches[0]) return;
-        moveSlider(e.touches[0].clientX);
+        if (!isDragging || !e.touches[0]) return;
+        onPointerMove(e.touches[0].clientX);
     });
+
+    // Jump Buttons
+    document.getElementById("jump25").addEventListener("click", () => { syncImageWidth(); setSliderPosition(25); });
+    document.getElementById("jump50").addEventListener("click", () => { syncImageWidth(); setSliderPosition(50); });
+    document.getElementById("jump75").addEventListener("click", () => { syncImageWidth(); setSliderPosition(75); });
+
+    // Initial position 50%
+    setSliderPosition(50);
+    setTimeout(syncImageWidth, 150);
 
     // Toggle Modes (Slider vs Side by side)
     const btnSlider = document.getElementById("btnModeSlider");
@@ -442,6 +545,7 @@ function setupImageComparison(expData) {
         btnSide.classList.remove("active");
         sliderContainer.classList.remove("d-none");
         sideContainer.classList.add("d-none");
+        syncImageWidth();
     });
 
     btnSide.addEventListener("click", () => {
@@ -452,21 +556,73 @@ function setupImageComparison(expData) {
     });
 }
 
-/* Charts Dashboard (FR-08) */
-function renderCharts(expData) {
+/* ========================================================
+   2. METRICS DASHBOARD (RADAR, BAR, RATE-DISTORTION, TIME)
+   ======================================================== */
+function renderMetricsDashboard(expData) {
     const validResults = expData.results.filter(r => r.success);
     const labels = validResults.map(r => `${r.target_format} Q${r.quality}`);
 
     const colors = {
-        JPEG: 'rgba(239, 68, 68, 0.85)',
-        PNG: 'rgba(59, 130, 246, 0.85)',
-        WEBP: 'rgba(16, 185, 129, 0.85)',
-        AVIF: 'rgba(168, 85, 247, 0.85)'
+        JPEG: { bg: 'rgba(239, 68, 68, 0.75)', border: '#ef4444' },
+        PNG: { bg: 'rgba(59, 130, 246, 0.75)', border: '#3b82f6' },
+        WEBP: { bg: 'rgba(16, 185, 129, 0.75)', border: '#10b981' },
+        AVIF: { bg: 'rgba(168, 85, 247, 0.75)', border: '#a855f7' }
     };
 
-    const getBgColor = (r) => colors[r.target_format] || 'rgba(148, 163, 184, 0.85)';
+    // 1. Radar Chart (Đa chiều: PSNR, SSIM, Saving %, Speed, Compression Ratio)
+    const radarCtx = document.getElementById('radarChart').getContext('2d');
+    
+    // Choose representative candidates for clean radar comparison
+    const targetFormats = [...new Set(validResults.map(r => r.target_format))];
+    const radarDatasets = targetFormats.map(fmt => {
+        // Pick Q75 or closest quality for this format
+        const rList = validResults.filter(r => r.target_format === fmt);
+        const rep = rList.find(r => r.quality === 75) || rList[0];
+        const c = colors[fmt] || { bg: 'rgba(148, 163, 184, 0.5)', border: '#94a3b8' };
 
-    // Chart 1: File Size
+        // Normalize metrics to 0 - 100 scale
+        const psnrScore = Math.min(100, Math.max(0, rep.quality_metrics.psnr * 1.5));
+        const ssimScore = Math.min(100, Math.max(0, rep.quality_metrics.ssim * 100));
+        const savingScore = Math.max(0, rep.size_analysis.saving_percent);
+        const speedScore = Math.max(10, Math.min(100, 100 - (rep.encoding_time_ms / 2)));
+        const densityScore = Math.min(100, rep.size_analysis.compression_ratio * 15);
+
+        return {
+            label: `${fmt} (Q${rep.quality})`,
+            data: [psnrScore, ssimScore, savingScore, speedScore, densityScore],
+            backgroundColor: c.bg.replace("0.75", "0.2"),
+            borderColor: c.border,
+            pointBackgroundColor: c.border,
+            borderWidth: 2,
+            pointRadius: 4
+        };
+    });
+
+    new Chart(radarCtx, {
+        type: 'radar',
+        data: {
+            labels: ['Độ nét PSNR', 'Cấu trúc SSIM', 'Tiết kiệm DL (%)', 'Tốc độ mã hóa', 'Tỷ lệ nén (Ratio)'],
+            datasets: radarDatasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    pointLabels: { color: '#cbd5e1', font: { size: 11, weight: 'bold' } },
+                    ticks: { display: false, max: 100, min: 0 }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#cbd5e1', font: { size: 11 } } }
+            }
+        }
+    });
+
+    // 2. Bar Chart: File Size Comparison
     const sizeCtx = document.getElementById('sizeChart').getContext('2d');
     new Chart(sizeCtx, {
         type: 'bar',
@@ -475,8 +631,10 @@ function renderCharts(expData) {
             datasets: [{
                 label: 'Dung lượng (KB)',
                 data: validResults.map(r => roundNum(r.file_size_bytes / 1024, 1)),
-                backgroundColor: validResults.map(getBgColor),
-                borderRadius: 4
+                backgroundColor: validResults.map(r => (colors[r.target_format] || colors.JPEG).bg),
+                borderColor: validResults.map(r => (colors[r.target_format] || colors.JPEG).border),
+                borderWidth: 1,
+                borderRadius: 5
             }]
         },
         options: {
@@ -484,13 +642,13 @@ function renderCharts(expData) {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#94a3b8' } },
                 x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
             }
         }
     });
 
-    // Chart 2: Rate-Distortion Curve (Size in KB vs PSNR)
+    // 3. Rate-Distortion Curve (Dung lượng vs PSNR)
     const rdCtx = document.getElementById('rdChart').getContext('2d');
     const rdData = validResults.map(r => ({
         x: roundNum(r.file_size_bytes / 1024, 1),
@@ -504,9 +662,9 @@ function renderCharts(expData) {
             datasets: [{
                 label: 'PSNR (dB)',
                 data: rdData,
-                backgroundColor: validResults.map(getBgColor),
+                backgroundColor: validResults.map(r => (colors[r.target_format] || colors.JPEG).border),
                 pointRadius: 6,
-                pointHoverRadius: 8
+                pointHoverRadius: 9
             }]
         },
         options: {
@@ -520,37 +678,13 @@ function renderCharts(expData) {
                 }
             },
             scales: {
-                x: { title: { display: true, text: 'Dung lượng (KB)', color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-                y: { title: { display: true, text: 'PSNR (dB)', color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+                x: { title: { display: true, text: 'Dung lượng (KB)', color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#94a3b8' } },
+                y: { title: { display: true, text: 'PSNR (dB)', color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#94a3b8' } }
             }
         }
     });
 
-    // Chart 3: SSIM Comparison
-    const ssimCtx = document.getElementById('ssimChart').getContext('2d');
-    new Chart(ssimCtx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'SSIM Score',
-                data: validResults.map(r => r.quality_metrics.ssim),
-                backgroundColor: 'rgba(16, 185, 129, 0.85)',
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { min: 0.8, max: 1.0, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
-            }
-        }
-    });
-
-    // Chart 4: Encoding Time
+    // 4. Latency / Encoding Time Performance
     const timeCtx = document.getElementById('timeChart').getContext('2d');
     new Chart(timeCtx, {
         type: 'bar',
@@ -559,8 +693,10 @@ function renderCharts(expData) {
             datasets: [{
                 label: 'Thời gian mã hóa (ms)',
                 data: validResults.map(r => r.encoding_time_ms),
-                backgroundColor: 'rgba(245, 158, 11, 0.85)',
-                borderRadius: 4
+                backgroundColor: 'rgba(245, 158, 11, 0.75)',
+                borderColor: '#f59e0b',
+                borderWidth: 1,
+                borderRadius: 5
             }]
         },
         options: {
@@ -568,7 +704,7 @@ function renderCharts(expData) {
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#94a3b8' } },
                 x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
             }
         }
@@ -581,17 +717,17 @@ function renderResultsTable(expData) {
     tbody.innerHTML = "";
 
     const results = expData.results;
-    document.getElementById("tableRowCount").textContent = `Tổng cộng ${results.length} cấu hình`;
+    document.getElementById("tableRowCount").textContent = `Tổng cộng ${results.length} cấu hình thử nghiệm`;
 
     results.forEach(r => {
         const tr = document.createElement("tr");
 
         if (!r.success) {
             tr.innerHTML = `
-                <td class="fw-bold text-slate-400 py-2 px-3">${r.target_format}</td>
-                <td class="text-slate-400 py-2 px-2">Q${r.quality}</td>
-                <td colspan="9" class="text-danger py-2 px-3"><i class="fa-solid fa-circle-xmark me-1"></i> ${r.error_message || "Chuyển đổi thất bại"}</td>
-                <td class="text-end py-2 px-3">-</td>
+                <td class="fw-bold text-slate-400 py-2.5 px-3">${r.target_format}</td>
+                <td class="text-slate-400 py-2.5 px-2">Q${r.quality}</td>
+                <td colspan="9" class="text-danger py-2.5 px-3"><i class="fa-solid fa-circle-xmark me-1"></i> ${r.error_message || "Chuyển đổi thất bại"}</td>
+                <td class="text-end py-2.5 px-3">-</td>
             `;
             tbody.appendChild(tr);
             return;
@@ -605,20 +741,20 @@ function renderResultsTable(expData) {
             : `<span class="badge bg-danger-subtle text-danger text-xxs">+${Math.abs(s.saving_percent)}%</span>`;
 
         tr.innerHTML = `
-            <td class="fw-bold text-white py-2 px-3">
+            <td class="fw-bold text-white py-2.5 px-3">
                 <span class="badge bg-slate-800 border border-slate-700 text-xs">${r.target_format}</span>
             </td>
-            <td class="text-slate-300 py-2 px-2">Q${r.quality}</td>
-            <td class="fw-semibold text-warning py-2 px-3">${s.formatted_compressed}</td>
-            <td class="py-2 px-2">${savingBadge}</td>
-            <td class="text-slate-300 py-2 px-2">${s.compression_ratio}x</td>
-            <td class="text-slate-400 py-2 px-2">${s.bpp}</td>
-            <td class="text-slate-400 py-2 px-2">${q.mse}</td>
-            <td class="fw-semibold text-info py-2 px-2">${q.psnr_display}</td>
-            <td class="fw-bold text-primary py-2 px-2">${q.ssim}</td>
-            <td class="text-slate-300 py-2 px-2">${r.encoding_time_ms} ms</td>
-            <td class="py-2 px-3"><span class="badge bg-dark border border-slate-700 text-slate-300 text-xxs">${q.quality_rating}</span></td>
-            <td class="text-end py-2 px-3">
+            <td class="text-slate-300 py-2.5 px-2">Q${r.quality}</td>
+            <td class="fw-semibold text-warning py-2.5 px-3">${s.formatted_compressed}</td>
+            <td class="py-2.5 px-2">${savingBadge}</td>
+            <td class="text-slate-300 py-2.5 px-2">${s.compression_ratio}x</td>
+            <td class="text-slate-400 py-2.5 px-2">${s.bpp}</td>
+            <td class="text-slate-400 py-2.5 px-2">${q.mse}</td>
+            <td class="fw-semibold text-info py-2.5 px-2">${q.psnr_display}</td>
+            <td class="fw-bold text-primary py-2.5 px-2">${q.ssim}</td>
+            <td class="text-slate-300 py-2.5 px-2">${r.encoding_time_ms} ms</td>
+            <td class="py-2.5 px-3"><span class="badge bg-dark border border-slate-700 text-slate-300 text-xxs">${q.quality_rating}</span></td>
+            <td class="text-end py-2.5 px-3">
                 <a href="${r.url}" download="${r.filename}" class="btn btn-outline-slate btn-sm py-0.5 px-2 text-xxs" title="Tải tệp ảnh này">
                     <i class="fa-solid fa-download"></i>
                 </a>
@@ -628,7 +764,11 @@ function renderResultsTable(expData) {
     });
 }
 
+/* Helpers */
 function roundNum(num, dec) {
     return Math.round(num * Math.pow(10, dec)) / Math.pow(10, dec);
 }
 
+function maxBy(arr, fn) {
+    return arr.reduce((best, curr) => fn(curr) > fn(best) ? curr : best, arr[0]);
+}

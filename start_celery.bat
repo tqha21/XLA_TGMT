@@ -20,3 +20,4 @@ echo.
 celery -A make_celery:celery_app worker --loglevel=info -P solo
 
 pause
+

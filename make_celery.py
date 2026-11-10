@@ -5,3 +5,4 @@ celery_app = flask_app.extensions["celery"]
 
 if __name__ == "__main__":
     celery_app.start()
+

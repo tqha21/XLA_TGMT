@@ -1,4 +1,4 @@
-/* Modern Tech Theme Stylesheet for ImageBench */
+/* Modern Tech Theme Stylesheet for ImageBench Pro */
 
 :root {
     --bg-slate: #0b1120;
@@ -10,8 +10,10 @@
     --text-primary: #f8fafc;
     --text-muted: #94a3b8;
     --accent-blue: #3b82f6;
+    --accent-indigo: #6366f1;
     --accent-green: #10b981;
     --accent-amber: #f59e0b;
+    --accent-rose: #f43f5e;
 }
 
 body.bg-slate {
@@ -31,7 +33,7 @@ body.bg-slate {
 .fw-extrabold { font-weight: 800 !important; }
 .max-w-700 { max-width: 700px; }
 
-/* Colors */
+/* Surface Colors */
 .bg-navy { background-color: var(--bg-navy) !important; }
 .bg-card { background-color: var(--bg-card) !important; }
 .bg-card-header { background-color: var(--bg-card-header) !important; }
@@ -39,7 +41,7 @@ body.bg-slate {
 .border-slate-700 { border-color: #334155 !important; }
 .border-slate-800 { border-color: #1e293b !important; }
 
-/* Gradient text */
+/* Gradient Branding */
 .text-primary-gradient {
     background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
     -webkit-background-clip: text;
@@ -51,18 +53,36 @@ body.bg-slate {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* KPI Scorecards */
+.kpi-card {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(8px);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(59, 130, 246, 0.4) !important;
+}
+.kpi-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
 /* Dropzone */
 .dropzone-area {
     background-color: rgba(15, 23, 42, 0.6);
     border: 2px dashed #334155;
     transition: all 0.2s ease-in-out;
 }
-
 .dropzone-area:hover, .dropzone-area.dragover {
     border-color: #3b82f6;
     background-color: rgba(37, 99, 235, 0.08);
 }
-
 .cursor-pointer { cursor: pointer; }
 
 /* Custom Buttons */
@@ -73,7 +93,7 @@ body.bg-slate {
 }
 .btn-primary:hover {
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
 }
 
 .btn-outline-slate {
@@ -99,24 +119,178 @@ body.bg-slate {
 
 /* Recommendation Cards */
 .rec-card {
-    border-radius: 12px;
+    border-radius: 14px;
     border-left: 4px solid;
-    transition: transform 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .rec-card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 .rec-card.rec-web {
     border-left-color: #10b981;
-    background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(30, 41, 59, 1) 100%);
+    background: linear-gradient(145deg, rgba(16, 185, 129, 0.1) 0%, rgba(30, 41, 59, 1) 100%);
 }
 .rec-card.rec-saving {
     border-left-color: #f59e0b;
-    background: linear-gradient(145deg, rgba(245, 158, 11, 0.08) 0%, rgba(30, 41, 59, 1) 100%);
+    background: linear-gradient(145deg, rgba(245, 158, 11, 0.1) 0%, rgba(30, 41, 59, 1) 100%);
 }
 .rec-card.rec-archival {
     border-left-color: #3b82f6;
-    background: linear-gradient(145deg, rgba(59, 130, 246, 0.08) 0%, rgba(30, 41, 59, 1) 100%);
+    background: linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(30, 41, 59, 1) 100%);
+}
+
+/* ========================================================
+   1. TWENTYTWENTY INTERACTIVE IMAGE COMPARISON SLIDER
+   ======================================================== */
+.twentytwenty-wrapper {
+    position: relative;
+    width: 100%;
+    min-height: 280px;
+    max-height: 520px;
+    overflow: hidden;
+    border-radius: 12px;
+    background-color: #060913;
+    user-select: none;
+    touch-action: pan-y;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Bottom layer (After image) */
+.twentytwenty-after {
+    display: block;
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Top layer (Before image wrapper clipped) */
+.twentytwenty-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    user-select: none;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* Top image fixed to wrapper full width to achieve sliding reveal */
+.twentytwenty-before {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Draggable Divider Line & Circular Handle */
+.twentytwenty-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 44px;
+    margin-left: -22px;
+    cursor: ew-resize;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.handle-line {
+    width: 2px;
+    flex-grow: 1;
+    background: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.8);
+}
+
+.handle-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: 3px solid #ffffff;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    box-shadow: 0 0 16px rgba(37, 99, 235, 0.9);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.twentytwenty-handle:hover .handle-circle,
+.twentytwenty-handle.dragging .handle-circle {
+    transform: scale(1.1);
+    box-shadow: 0 0 24px rgba(37, 99, 235, 1);
+}
+
+/* Directional Glassmorphism Labels */
+.twentytwenty-label {
+    position: absolute;
+    top: 14px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    z-index: 4;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.label-before { left: 14px; }
+.label-after { right: 14px; }
+
+/* Side by side image box */
+.side-img-box {
+    min-height: 320px;
+    max-height: 440px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.side-img-box img {
+    max-height: 420px;
+    object-fit: contain;
+}
+
+/* ========================================================
+   3. PULSE LOADING & REAL-TIME POLLING SPINNER
+   ======================================================== */
+.loading-pulse-spinner {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.1);
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulseRing 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulseRing {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.6); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 
 /* Custom Table styles */
@@ -125,4 +299,3 @@ body.bg-slate {
     --bs-table-striped-bg: #162032;
     --bs-table-hover-bg: #26354a;
 }
-
