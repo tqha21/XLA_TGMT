@@ -136,13 +136,19 @@
                         </button>
                     </div>
 
-                    <!-- Progress / Spinner Box -->
-                    <div id="processingBox" class="d-none text-center p-4 mt-3 rounded-3 bg-darker border border-slate-800">
-                        <div class="spinner-border text-primary mb-2" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                    <!-- Progress / Celery Task Status Box -->
+                    <div id="processingBox" class="d-none p-4 mt-3 rounded-3 bg-darker border border-slate-800">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-xs fw-bold text-slate-300" id="processStatusText">Đang xếp hàng chờ xử lý...</span>
+                            <span class="badge bg-primary-subtle text-primary text-xs" id="taskPercentBadge">0%</span>
                         </div>
-                        <h6 class="text-white fw-bold mb-1" id="processStatusText">Đang chuyển đổi và tính toán MSE, PSNR, SSIM...</h6>
-                        <p class="text-slate-400 text-xs mb-0">Quá trình diễn ra tự động trên từng ma trận điểm ảnh, vui lòng đợi trong giây lát.</p>
+                        <div class="progress mb-2 bg-slate-900 border border-slate-700" style="height: 10px;">
+                            <div id="taskProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center text-slate-400 text-xxs">
+                            <span><i class="fa-solid fa-server text-info me-1"></i>Celery Worker Queue</span>
+                            <span id="taskDetailText">Khởi động tiến trình...</span>
+                        </div>
                     </div>
                 </div>
             </div>

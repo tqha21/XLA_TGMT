@@ -37,7 +37,7 @@ def test_full_api_workflow(client):
     assert upload_data["metadata"]["width"] == 150
     assert upload_data["metadata"]["height"] == 100
     
-    # 3. Trigger experiment via POST /api/experiments
+    # 3. Trigger asynchronous benchmark via POST /api/experiments
     exp_res = client.post(
         "/api/experiments",
         json={
@@ -46,14 +46,20 @@ def test_full_api_workflow(client):
             "qualities": [50, 80]
         }
     )
-    assert exp_res.status_code == 200
+    assert exp_res.status_code == 202
     exp_data = exp_res.get_json()
-    assert exp_data["status"] == "success"
-    results = exp_data["data"]["results"]
-    assert len(results) >= 2
-    assert "recommendations" in exp_data["data"]
-    
-    # 4. Check status via GET /api/experiments/<id>
+    assert exp_data["status"] == "accepted"
+    task_id = exp_data["task_id"]
+    assert task_id is not None
+
+    # 4. Check Celery task status via GET /api/status/<task_id>
+    task_status_res = client.get(f"/api/status/{task_id}")
+    assert task_status_res.status_code == 200
+    task_status_data = task_status_res.get_json()
+    assert task_status_data["state"] == "SUCCESS"
+    assert task_status_data["percent"] == 100
+
+    # 5. Check experiment state via GET /api/experiments/<id>
     status_res = client.get(f"/api/experiments/{experiment_id}")
     assert status_res.status_code == 200
     assert status_res.get_json()["state"] == "completed"

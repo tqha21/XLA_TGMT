@@ -3,14 +3,14 @@ from pathlib import Path
 from flask import Flask, jsonify, request
 from PIL import Image, UnidentifiedImageError
 from config import Config
+from app.celery_app import celery_init_app
 
 def create_app(config_class=Config):
     """
     Application Factory for Image Format Comparison Web System.
-    Includes Enterprise-Grade Security defenses against:
-    - Path Traversal & Extension Spoofing
-    - Decompression Bomb Attacks (Image Bomb DoS)
-    - Corrupted / Malformed Image Exploits
+    Includes:
+    - Enterprise-Grade Security defenses (Magic Bytes & Image Bomb DoS prevention)
+    - Asynchronous Task Queue Architecture (Celery + Redis)
     """
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -18,6 +18,9 @@ def create_app(config_class=Config):
     # Configure Pillow Security Policy
     max_pixels = app.config.get("MAX_IMAGE_PIXELS", 100_000_000)
     Image.MAX_IMAGE_PIXELS = max_pixels
+    
+    # Initialize Celery with Flask Application Context
+    celery_init_app(app)
     
     # Ensure all working directories exist
     for dir_key in ["UPLOAD_FOLDER", "OUTPUT_FOLDER", "SAMPLE_FOLDER"]:

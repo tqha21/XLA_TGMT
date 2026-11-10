@@ -166,6 +166,20 @@ function initUploadPage() {
             startBenchmarkBtn.disabled = true;
             processingBox.classList.remove("d-none");
 
+            const taskProgressBar = document.getElementById("taskProgressBar");
+            const taskPercentBadge = document.getElementById("taskPercentBadge");
+            const processStatusText = document.getElementById("processStatusText");
+            const taskDetailText = document.getElementById("taskDetailText");
+
+            function updateProgressUI(percent, statusText, detailText) {
+                if (taskProgressBar) taskProgressBar.style.width = `${percent}%`;
+                if (taskPercentBadge) taskPercentBadge.textContent = `${percent}%`;
+                if (processStatusText) processStatusText.textContent = statusText;
+                if (taskDetailText && detailText) taskDetailText.textContent = detailText;
+            }
+
+            updateProgressUI(5, "Đang gửi yêu cầu vào hàng đợi Celery...", "Khởi tạo Task ID...");
+
             try {
                 const resp = await fetch("/api/experiments", {
                     method: "POST",
@@ -178,7 +192,39 @@ function initUploadPage() {
                 });
                 const data = await resp.json();
 
-                if (resp.ok && data.status === "success") {
+                if (resp.status === 202 && data.task_id) {
+                    // Start polling asynchronous Celery task status
+                    const taskId = data.task_id;
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusResp = await fetch(`/api/status/${taskId}`);
+                            const statusData = await statusResp.json();
+
+                            if (statusData.state === "PROCESSING") {
+                                updateProgressUI(
+                                    statusData.percent || 30,
+                                    statusData.status || "Đang xử lý nén...",
+                                    `Tiến trình: ${statusData.current || 0}/${statusData.total || 0}`
+                                );
+                            } else if (statusData.state === "SUCCESS") {
+                                clearInterval(pollInterval);
+                                updateProgressUI(100, "Hoàn tất thử nghiệm!", "Chuyển tiếp đến trang kết quả...");
+                                setTimeout(() => {
+                                    window.location.href = statusData.redirect_url || `/experiments/${currentExperimentId}`;
+                                }, 500);
+                            } else if (statusData.state === "FAILED") {
+                                clearInterval(pollInterval);
+                                processingBox.classList.add("d-none");
+                                startBenchmarkBtn.disabled = false;
+                                showAlert("Tác vụ xử lý ảnh thất bại: " + (statusData.error || "Lỗi không xác định"));
+                            }
+                        } catch (pollErr) {
+                            // Transient network blip during polling, continue
+                        }
+                    }, 600);
+
+                } else if (resp.ok && data.status === "success") {
+                    // Synchronous fallback (if applicable)
                     window.location.href = `/experiments/${currentExperimentId}`;
                 } else {
                     processingBox.classList.add("d-none");
