@@ -56,8 +56,13 @@ def upload_image():
         
     file = request.files["image"]
     max_bytes = current_app.config.get("MAX_CONTENT_LENGTH", 20 * 1024 * 1024)
+    max_pixels = current_app.config.get("MAX_IMAGE_PIXELS", 100_000_000)
     
-    is_valid, error_msg, quick_summary = validate_image_file(file, max_size_bytes=max_bytes)
+    is_valid, error_msg, quick_summary = validate_image_file(
+        file,
+        max_size_bytes=max_bytes,
+        max_pixels=max_pixels
+    )
     if not is_valid:
         return jsonify({
             "status": "error",

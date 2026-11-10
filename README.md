@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ImageBench - Hệ Thống Đánh Giá & So Sánh Định Dạng Ảnh Nén
 
 Hệ thống Web mã nguồn mở phát triển trên nền tảng **Python Flask Application Factory**, chuyên dụng để thử nghiệm, đo đạc và so sánh thực nghiệm hiệu quả của các định dạng ảnh kỹ thuật số phổ biến (**JPEG, PNG, WebP, AVIF**) phục vụ tối ưu hóa hiệu năng ứng dụng Web và thiết bị di động.
@@ -164,3 +165,6 @@ pytest tests/test_api.py -v
 - [x] **9. Có README, SRS và báo cáo thực nghiệm:** Tài liệu `docs/SRS.md` và `README.md` đầy đủ.
 - [x] **10. Kịch bản demo hoàn chỉnh:** Có hướng dẫn từng bước trực quan.
 
+=======
+# XLA_TGMT
+>>>>>>> 9e8c022e920326c57a020c6872151872293d0c61
