@@ -1,0 +1,102 @@
+services:
+  # ============================================================================
+  # 1. Redis Service (Message Broker & Celery Result Backend)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: xla_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - xla_network
+
+  # ============================================================================
+  # 2. Flask Web Service (Production WSGI Gunicorn)
+  # ============================================================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: xla_tgmt_web:latest
+    container_name: xla_web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_FOLDER=/app/uploads
+      - OUTPUT_FOLDER=/app/outputs
+    volumes:
+      - shared_uploads:/app/uploads
+      - shared_outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - xla_network
+
+  # ============================================================================
+  # 3. Celery Worker (Asynchronous Image Processing Engine)
+  # ============================================================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: xla_tgmt_worker:latest
+    container_name: xla_worker
+    restart: unless-stopped
+    command: ["celery", "-A", "make_celery:celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_FOLDER=/app/uploads
+      - OUTPUT_FOLDER=/app/outputs
+    volumes:
+      - shared_uploads:/app/uploads
+      - shared_outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - xla_network
+
+# ==============================================================================
+# Persistent Named Volumes (Data sharing between Web & Worker)
+# ==============================================================================
+volumes:
+  shared_uploads:
+    driver: local
+  shared_outputs:
+    driver: local
+  redis_data:
+    driver: local
+
+# ==============================================================================
+# Isolated Internal Docker Network
+# ==============================================================================
+networks:
+  xla_network:
+    driver: bridge

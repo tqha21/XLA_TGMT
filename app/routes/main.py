@@ -55,3 +55,8 @@ def list_samples():
                 })
     return jsonify({"status": "success", "samples": samples})
 
+@main_bp.route("/health", methods=["GET"])
+def health():
+    """Health check endpoint for Docker & container orchestrator probes."""
+    return jsonify({"status": "healthy", "service": "XLA_TGMT"}), 200
+

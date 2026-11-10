@@ -83,3 +83,12 @@ def test_full_api_workflow(client):
     del_check = client.get(f"/api/experiments/{experiment_id}")
     assert del_check.status_code == 404
 
+def test_health_endpoint(client):
+    """Verifies that the Docker container healthcheck endpoint returns 200 OK."""
+    res = client.get("/health")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["status"] == "healthy"
+    assert data["service"] == "XLA_TGMT"
+
+
