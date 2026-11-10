@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}ImageBench - Tải Ảnh & Thiết Lập Thử Nghiệm{% endblock %}
+
+{% block content %}
+<div class="container-xl">
+    <!-- Header Banner -->
+    <div class="row mb-4">
+        <div class="col-12 text-center">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1.5 rounded-pill mb-2">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Nghiên Cứu & Đánh Giá Nén Ảnh Đa Định Dạng
+            </span>
+            <h1 class="display-6 fw-extrabold text-white mb-2">Đo Lường & Đánh Giá Chất Lượng Ảnh Nén</h1>
+            <p class="text-slate-400 mx-auto fs-6 max-w-700">
+                Tải ảnh lên để tự động chuyển đổi sang <b>JPEG, PNG, WebP, AVIF</b> với các mức chất lượng khác nhau, 
+                đo đạc chính xác <b>Dung lượng, Tỷ lệ nén, MSE, PSNR, SSIM</b> và nhận khuyến nghị định dạng tối ưu.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="row g-4 justify-content-center">
+        <!-- Left: Upload & Config Column -->
+        <div class="col-lg-7">
+            <div class="card bg-card border border-slate-700 shadow-sm rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-white fs-6">
+                        <i class="fa-solid fa-cloud-arrow-up text-primary me-2"></i>1. Tải Lên Hoặc Chọn Ảnh Thử Nghiệm
+                    </span>
+                    <span class="text-xs text-slate-400">Tối đa 20 MB · PNG, JPG, WEBP, BMP</span>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Dropzone -->
+                    <div id="dropzone" class="dropzone-area p-4 text-center rounded-3 border-2 border-dashed border-slate-600 hover-border-primary transition cursor-pointer mb-3">
+                        <input type="file" id="imageInput" class="d-none" accept=".png,.jpg,.jpeg,.webp,.bmp,.tiff">
+                        <div class="dropzone-icon mb-2">
+                            <i class="fa-solid fa-images text-slate-500 fs-1"></i>
+                        </div>
+                        <h6 class="text-white fw-bold mb-1">Kéo và thả tệp ảnh vào đây</h6>
+                        <p class="text-slate-400 text-xs mb-3">hoặc nhấp chuột để chọn tệp từ máy tính của bạn</p>
+                        <button type="button" class="btn btn-primary btn-sm px-4 rounded-pill" onclick="document.getElementById('imageInput').click()">
+                            <i class="fa-regular fa-folder-open me-1.5"></i> Chọn ảnh từ máy tính
+                        </button>
+                    </div>
+
+                    <!-- Sample Images Chips -->
+                    {% if samples %}
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-xs fw-semibold text-slate-400 uppercase tracking-wider">
+                                <i class="fa-solid fa-vial-circle-check text-info me-1"></i> Hoặc thử nhanh với ảnh mẫu có sẵn:
+                            </span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for sample in samples %}
+                            <button type="button" class="btn btn-outline-slate text-slate-300 btn-sm rounded-pill text-xs sample-btn py-1 px-3" data-sample="{{ sample.name }}">
+                                <i class="fa-regular fa-image text-primary me-1"></i> {{ sample.name }} ({{ sample.size_kb }} KB)
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Upload Alert Error Message Box -->
+                    <div id="uploadAlert" class="alert alert-danger d-none text-xs rounded-3 py-2 px-3 mb-3" role="alert">
+                        <i class="fa-solid fa-triangle-exclamation me-1.5"></i> <span id="uploadErrorText"></span>
+                    </div>
+
+                    <!-- Benchmark Configuration Options -->
+                    <div class="border-top border-slate-700 pt-3 mt-3">
+                        <h6 class="fw-bold text-white mb-3 fs-6">
+                            <i class="fa-solid fa-sliders text-warning me-2"></i>2. Cấu Hình Thử Nghiệm Nén
+                        </h6>
+                        
+                        <div class="row g-3">
+                            <!-- Format Selection -->
+                            <div class="col-md-6">
+                                <label class="form-label text-xs fw-semibold text-slate-300 uppercase tracking-wider mb-2">Định dạng mục tiêu</label>
+                                <div class="d-flex flex-column gap-2 bg-darker p-3 rounded-3 border border-slate-800">
+                                    <div class="form-check">
+                                        <input class="form-check-input format-checkbox" type="checkbox" value="WEBP" id="fmtWebp" checked>
+                                        <label class="form-check-label text-white text-xs" for="fmtWebp">
+                                            <b>WebP</b> <span class="badge bg-success-subtle text-success text-xxs ms-1">Đề xuất</span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input format-checkbox" type="checkbox" value="JPEG" id="fmtJpeg" checked>
+                                        <label class="form-check-label text-white text-xs" for="fmtJpeg">
+                                            <b>JPEG</b> <span class="text-slate-400 text-xxs ms-1">(Chuẩn thông dụng)</span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input format-checkbox" type="checkbox" value="PNG" id="fmtPng" checked>
+                                        <label class="form-check-label text-white text-xs" for="fmtPng">
+                                            <b>PNG</b> <span class="text-slate-400 text-xxs ms-1">(Lossless / Alpha)</span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input format-checkbox" type="checkbox" value="AVIF" id="fmtAvif">
+                                        <label class="form-check-label text-white text-xs" for="fmtAvif">
+                                            <b>AVIF</b> <span class="badge bg-info-subtle text-info text-xxs ms-1">Thế hệ mới</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quality Selection -->
+                            <div class="col-md-6">
+                                <label class="form-label text-xs fw-semibold text-slate-300 uppercase tracking-wider mb-2">Mức chất lượng (Quality)</label>
+                                <div class="d-flex flex-column gap-2 bg-darker p-3 rounded-3 border border-slate-800">
+                                    <div class="form-check">
+                                        <input class="form-check-input quality-checkbox" type="checkbox" value="25" id="q25" checked>
+                                        <label class="form-check-label text-white text-xs" for="q25">Quality 25% (Nén cao / Thumbnail)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input quality-checkbox" type="checkbox" value="50" id="q50" checked>
+                                        <label class="form-check-label text-white text-xs" for="q50">Quality 50% (Tiết kiệm băng thông)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input quality-checkbox" type="checkbox" value="75" id="q75" checked>
+                                        <label class="form-check-label text-white text-xs" for="q75">Quality 75% (Tiêu chuẩn Web khuyến nghị)</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input quality-checkbox" type="checkbox" value="90" id="q90" checked>
+                                        <label class="form-check-label text-white text-xs" for="q90">Quality 90% (Chất lượng cao)</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div class="mt-4">
+                        <button id="startBenchmarkBtn" type="button" class="btn btn-primary w-100 py-2.5 rounded-3 fw-bold text-sm shadow-sm" disabled>
+                            <i class="fa-solid fa-play me-2"></i> Bắt Đầu Thử Nghiệm & Đánh Giá
+                        </button>
+                    </div>
+
+                    <!-- Progress / Spinner Box -->
+                    <div id="processingBox" class="d-none text-center p-4 mt-3 rounded-3 bg-darker border border-slate-800">
+                        <div class="spinner-border text-primary mb-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h6 class="text-white fw-bold mb-1" id="processStatusText">Đang chuyển đổi và tính toán MSE, PSNR, SSIM...</h6>
+                        <p class="text-slate-400 text-xs mb-0">Quá trình diễn ra tự động trên từng ma trận điểm ảnh, vui lòng đợi trong giây lát.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Image Preview & Metadata Column -->
+        <div class="col-lg-5">
+            <div class="card bg-card border border-slate-700 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-card-header border-bottom border-slate-700 px-4 py-3">
+                    <span class="fw-bold text-white fs-6">
+                        <i class="fa-solid fa-circle-nodes text-success me-2"></i>Thông Tin & Xem Trước Ảnh Gốc
+                    </span>
+                </div>
+                <div class="card-body p-4 d-flex flex-column">
+                    <!-- Placeholder when no image loaded -->
+                    <div id="previewPlaceholder" class="text-center py-5 my-auto text-slate-500">
+                        <i class="fa-regular fa-image fs-1 mb-2 opacity-50"></i>
+                        <p class="text-xs mb-0">Chưa có ảnh nào được chọn.<br>Hãy tải ảnh lên hoặc chọn ảnh mẫu để xem thông số.</p>
+                    </div>
+
+                    <!-- Image Preview Container -->
+                    <div id="previewContainer" class="d-none flex-column h-100">
+                        <div class="preview-box bg-darker rounded-3 border border-slate-800 p-2 text-center mb-3 overflow-hidden d-flex align-items-center justify-content-center" style="max-height: 260px;">
+                            <img id="previewImage" src="" alt="Xem trước" class="img-fluid rounded" style="max-height: 240px; object-fit: contain;">
+                        </div>
+
+                        <!-- Metadata Table -->
+                        <div class="metadata-table flex-grow-1">
+                            <h6 class="text-xs uppercase fw-bold text-slate-400 mb-2">Metadata trích xuất (FR-02)</h6>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm table-borderless text-xs mb-0">
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-file-image me-1.5 text-primary"></i>Tên tệp:</td>
+                                            <td class="text-end fw-semibold text-white py-1.5 text-truncate" style="max-width: 160px;" id="metaFilename">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-hard-drive me-1.5 text-warning"></i>Dung lượng gốc:</td>
+                                            <td class="text-end fw-semibold text-warning py-1.5" id="metaSize">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-expand me-1.5 text-info"></i>Độ phân giải:</td>
+                                            <td class="text-end fw-semibold text-white py-1.5" id="metaDimensions">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-palette me-1.5 text-success"></i>Chế độ màu / Độ sâu:</td>
+                                            <td class="text-end fw-semibold text-white py-1.5" id="metaMode">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-circle-half-stroke me-1.5 text-danger"></i>Kênh trong suốt (Alpha):</td>
+                                            <td class="text-end fw-semibold py-1.5" id="metaAlpha">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-slate-400 py-1.5"><i class="fa-solid fa-crop-simple me-1.5 text-secondary"></i>Tỷ lệ khung hình:</td>
+                                            <td class="text-end fw-semibold text-white py-1.5" id="metaAspect">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
