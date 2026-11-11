@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from flask import Blueprint, request, jsonify, current_app
 from celery.result import AsyncResult
-from app.tasks.image_tasks import run_image_benchmark_task, get_experiment_store_path
+from app.tasks.image_tasks import run_image_benchmark_task, execute_image_benchmark, get_experiment_store_path
 from app.utils.file_manager import cleanup_experiment_folders
 
 analysis_bp = Blueprint("analysis_bp", __name__)
@@ -57,19 +57,16 @@ def run_experiment():
         current_app.logger.warning(f"Celery queue error: {exc}. Falling back to direct in-process execution...")
         try:
             # Fallback to direct synchronous execution in case Celery broker / Redis is unavailable
-            task = run_image_benchmark_task.apply(
-                kwargs={
-                    "experiment_id": experiment_id,
-                    "requested_formats": requested_formats,
-                    "requested_qualities": requested_qualities
-                }
+            execute_image_benchmark(
+                experiment_id=experiment_id,
+                requested_formats=requested_formats,
+                requested_qualities=requested_qualities
             )
-            task_id = getattr(task, "id", None) or experiment_id
             return jsonify({
                 "status": "accepted",
-                "task_id": task_id,
+                "task_id": experiment_id,
                 "experiment_id": experiment_id,
-                "message": "Đang thực thi thử nghiệm trực tiếp..."
+                "message": "Hoàn tất phân tích ảnh trực tiếp."
             }), 202
         except Exception as inner_exc:
             return jsonify({

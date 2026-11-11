@@ -47,7 +47,7 @@ function initUploadPage() {
         document.getElementById("metaSize").textContent = meta.formatted_size;
         document.getElementById("metaDimensions").textContent = `${meta.width} x ${meta.height} px (${meta.megapixels} MP)`;
         document.getElementById("metaMode").textContent = `${meta.mode} (${meta.bit_depth})`;
-        
+
         const alphaEl = document.getElementById("metaAlpha");
         if (meta.has_alpha) {
             alphaEl.innerHTML = '<span class="text-warning"><i class="fa-solid fa-triangle-exclamation me-1"></i>Có (Cần WebP/PNG)</span>';
@@ -67,7 +67,7 @@ function initUploadPage() {
     async function uploadFile(file) {
         if (!file) return;
         hideAlert();
-        
+
         // Immediate local preview to prevent any broken image icon
         try {
             previewImage.src = URL.createObjectURL(file);
@@ -77,7 +77,7 @@ function initUploadPage() {
         } catch (e) {
             console.warn("ObjectURL fallback:", e);
         }
-        
+
         const formData = new FormData();
         formData.append("image", file);
 
@@ -107,10 +107,10 @@ function initUploadPage() {
             const sampleName = btn.dataset.sample;
             hideAlert();
             startBenchmarkBtn.disabled = true;
-            
+
             const formData = new FormData();
             formData.append("sample_name", sampleName);
-            
+
             try {
                 const resp = await fetch("/api/images/upload", {
                     method: "POST",
@@ -292,7 +292,7 @@ async function initResultsPage(experimentId) {
                     alert("Tác vụ xử lý thất bại: " + (sData.error || "Lỗi"));
                     window.location.href = "/";
                 }
-            } catch (e) {}
+            } catch (e) { }
         }, 700);
     } else {
         loadAndRenderExperiment(experimentId);
@@ -589,7 +589,7 @@ function renderMetricsDashboard(expData) {
 
     // 1. Radar Chart (Đa chiều: PSNR, SSIM, Saving %, Speed, Compression Ratio)
     const radarCtx = document.getElementById('radarChart').getContext('2d');
-    
+
     // Choose representative candidates for clean radar comparison
     const targetFormats = [...new Set(validResults.map(r => r.target_format))];
     const radarDatasets = targetFormats.map(fmt => {
@@ -753,7 +753,7 @@ function renderResultsTable(expData) {
         const s = r.size_analysis;
         const q = r.quality_metrics;
 
-        const savingBadge = s.saving_percent >= 0 
+        const savingBadge = s.saving_percent >= 0
             ? `<span class="badge bg-success-subtle text-success text-xxs">-${s.saving_percent}%</span>`
             : `<span class="badge bg-danger-subtle text-danger text-xxs">+${Math.abs(s.saving_percent)}%</span>`;
 

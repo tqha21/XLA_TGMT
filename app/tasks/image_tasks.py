@@ -16,16 +16,24 @@ def get_experiment_store_path(experiment_id: str) -> Path:
     instance_dir.mkdir(parents=True, exist_ok=True)
     return instance_dir / f"{experiment_id}.json"
 
-@shared_task(bind=True, name="app.tasks.image_tasks.run_image_benchmark_task")
-def run_image_benchmark_task(
-    self,
+def safe_update_state(task_self, **kwargs):
+    """Safely updates task progress state without failing if the broker/backend is unavailable."""
+    if task_self and hasattr(task_self, "update_state"):
+        try:
+            task_self.update_state(**kwargs)
+        except Exception:
+            pass
+
+def execute_image_benchmark(
     experiment_id: str,
     requested_formats: List[str],
-    requested_qualities: List[int]
+    requested_qualities: List[int],
+    task_self=None
 ) -> Dict[str, Any]:
     """
-    Asynchronous Celery Task for complete Image Compression Benchmark.
-    Provides real-time state updates (PROGRESS) to the client.
+    Core Image Compression & Quality Assessment Engine.
+    Executes conversions (JPEG, PNG, WebP, AVIF) and evaluates MSE, PSNR, SSIM, and file savings.
+    Can be run directly or inside a Celery task worker.
     """
     upload_dir = Path(current_app.config["UPLOAD_FOLDER"]) / experiment_id
     if not upload_dir.exists() or not upload_dir.is_dir():
@@ -57,7 +65,8 @@ def run_image_benchmark_task(
     has_alpha = metadata["has_alpha"]
 
     # Initial state update
-    self.update_state(
+    safe_update_state(
+        task_self,
         state="PROGRESS",
         meta={
             "current": 0,
@@ -72,7 +81,8 @@ def run_image_benchmark_task(
         current_step += 1
         percent = int((current_step / total_steps) * 100)
         
-        self.update_state(
+        safe_update_state(
+            task_self,
             state="PROGRESS",
             meta={
                 "current": current_step,
@@ -131,7 +141,8 @@ def run_image_benchmark_task(
             })
 
     # Generate recommendations
-    self.update_state(
+    safe_update_state(
+        task_self,
         state="PROGRESS",
         meta={
             "current": total_steps,
@@ -156,4 +167,19 @@ def run_image_benchmark_task(
         json.dump(experiment_data, f, ensure_ascii=False, indent=2)
 
     return experiment_data
+
+@shared_task(bind=True, name="app.tasks.image_tasks.run_image_benchmark_task")
+def run_image_benchmark_task(
+    self,
+    experiment_id: str,
+    requested_formats: List[str],
+    requested_qualities: List[int]
+) -> Dict[str, Any]:
+    """Asynchronous Celery Task for complete Image Compression Benchmark."""
+    return execute_image_benchmark(
+        experiment_id=experiment_id,
+        requested_formats=requested_formats,
+        requested_qualities=requested_qualities,
+        task_self=self
+    )
 
