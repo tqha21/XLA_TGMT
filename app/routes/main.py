@@ -28,18 +28,18 @@ def view_results(experiment_id: str):
 @main_bp.route("/media/uploads/<experiment_id>/<path:filename>")
 def serve_upload(experiment_id: str, filename: str):
     """Safely serves uploaded source images."""
-    folder = Path(current_app.config["UPLOAD_FOLDER"]) / experiment_id
+    folder = (Path(current_app.config["UPLOAD_FOLDER"]).resolve() / experiment_id)
     if not folder.exists():
         abort(404)
-    return send_from_directory(folder, filename)
+    return send_from_directory(str(folder), filename)
 
 @main_bp.route("/media/outputs/<experiment_id>/<path:filename>")
 def serve_output(experiment_id: str, filename: str):
     """Safely serves converted output images."""
-    folder = Path(current_app.config["OUTPUT_FOLDER"]) / experiment_id
+    folder = (Path(current_app.config["OUTPUT_FOLDER"]).resolve() / experiment_id)
     if not folder.exists():
         abort(404)
-    return send_from_directory(folder, filename)
+    return send_from_directory(str(folder), filename)
 
 @main_bp.route("/api/samples", methods=["GET"])
 def list_samples():

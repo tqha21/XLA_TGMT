@@ -38,7 +38,11 @@ function initUploadPage() {
         const meta = data.metadata;
         currentExperimentId = data.experiment_id;
 
-        previewImage.src = data.preview_url;
+        if (data.preview_url) {
+            const testImg = new Image();
+            testImg.onload = () => { previewImage.src = data.preview_url; };
+            testImg.src = data.preview_url;
+        }
         document.getElementById("metaFilename").textContent = meta.filename;
         document.getElementById("metaSize").textContent = meta.formatted_size;
         document.getElementById("metaDimensions").textContent = `${meta.width} x ${meta.height} px (${meta.megapixels} MP)`;
@@ -64,6 +68,16 @@ function initUploadPage() {
         if (!file) return;
         hideAlert();
         
+        // Immediate local preview to prevent any broken image icon
+        try {
+            previewImage.src = URL.createObjectURL(file);
+            previewPlaceholder.classList.add("d-none");
+            previewContainer.classList.remove("d-none");
+            previewContainer.classList.add("d-flex");
+        } catch (e) {
+            console.warn("ObjectURL fallback:", e);
+        }
+        
         const formData = new FormData();
         formData.append("image", file);
 
@@ -78,6 +92,9 @@ function initUploadPage() {
                 displayMetadata(result);
             } else {
                 showAlert(result.message || "Tải ảnh thất bại.");
+                previewPlaceholder.classList.remove("d-none");
+                previewContainer.classList.add("d-none");
+                previewContainer.classList.remove("d-flex");
             }
         } catch (err) {
             showAlert("Lỗi mạng khi kết nối máy chủ: " + err.message);
@@ -195,7 +212,7 @@ function initUploadPage() {
                     const taskId = data.task_id;
                     const pollInterval = setInterval(async () => {
                         try {
-                            const statusResp = await fetch(`/api/status/${taskId}`);
+                            const statusResp = await fetch(`/api/status/${taskId}?exp_id=${currentExperimentId}`);
                             const statusData = await statusResp.json();
 
                             if (statusData.state === "PROCESSING") {

@@ -8,9 +8,13 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-image-format-benchmark-key-2026")
     
     # Upload and Output directories
-    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads"))
-    OUTPUT_FOLDER = os.getenv("OUTPUT_FOLDER", str(BASE_DIR / "outputs"))
-    SAMPLE_FOLDER = str(BASE_DIR / "data" / "sample_images")
+    _upload_env = os.getenv("UPLOAD_FOLDER", "uploads")
+    UPLOAD_FOLDER = str((BASE_DIR / _upload_env).resolve()) if not Path(_upload_env).is_absolute() else _upload_env
+
+    _output_env = os.getenv("OUTPUT_FOLDER", "outputs")
+    OUTPUT_FOLDER = str((BASE_DIR / _output_env).resolve()) if not Path(_output_env).is_absolute() else _output_env
+
+    SAMPLE_FOLDER = str((BASE_DIR / "data" / "sample_images").resolve())
     
     # File Limits: 20 MB strictly enforced
     MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 20 Megabytes
@@ -35,22 +39,36 @@ class Config:
     # =========================================================================
     CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
     CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
-    CELERY_ALWAYS_EAGER = os.getenv("CELERY_ALWAYS_EAGER", "False").lower() in ("true", "1", "yes")
+    CELERY_ALWAYS_EAGER = os.getenv("CELERY_ALWAYS_EAGER", "True").lower() in ("true", "1", "yes")
     
-    CELERY = {
-        "broker_url": CELERY_BROKER_URL,
-        "result_backend": CELERY_RESULT_BACKEND,
-        "task_serializer": "json",
-        "result_serializer": "json",
-        "accept_content": ["json"],
-        "result_expires": 86400,
-        "task_track_started": True,
-        "worker_prefetch_multiplier": 1,  # Fair distribution of heavy image tasks
-        "task_acks_late": True,           # Resilient against worker crash
-        "task_always_eager": CELERY_ALWAYS_EAGER,
-        "task_store_eager_result": CELERY_ALWAYS_EAGER,
-        "task_eager_propagates": CELERY_ALWAYS_EAGER,
-    }
+    if CELERY_ALWAYS_EAGER:
+        CELERY = {
+            "broker_url": "memory://",
+            "result_backend": "cache+memory://",
+            "task_serializer": "json",
+            "result_serializer": "json",
+            "accept_content": ["json"],
+            "result_expires": 86400,
+            "task_track_started": True,
+            "worker_prefetch_multiplier": 1,
+            "task_acks_late": True,
+            "task_always_eager": True,
+            "task_store_eager_result": True,
+            "task_eager_propagates": True,
+        }
+    else:
+        CELERY = {
+            "broker_url": CELERY_BROKER_URL,
+            "result_backend": CELERY_RESULT_BACKEND,
+            "task_serializer": "json",
+            "result_serializer": "json",
+            "accept_content": ["json"],
+            "result_expires": 86400,
+            "task_track_started": True,
+            "worker_prefetch_multiplier": 1,
+            "task_acks_late": True,
+            "task_always_eager": False,
+        }
 
 class TestConfig(Config):
     """Configuration for automated test suite."""
